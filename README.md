@@ -12,7 +12,7 @@ The PSP XMB background, alive on your macOS desktop. A single Metal fragment sha
 
 ![PSP Wave demo](docs/demo.gif)
 
-*Four palettes, live-reloaded from `config.json` while it runs. Full-quality clips: [demo.mp4](docs/demo.mp4) · [demo-idle.mp4](docs/demo-idle.mp4)*
+*Five built-in presets, switched live. Full-quality clips: [demo.mp4](docs/demo.mp4) · [demo-idle.mp4](docs/demo-idle.mp4)*
 
 ## Install
 
@@ -20,11 +20,12 @@ The PSP XMB background, alive on your macOS desktop. A single Metal fragment sha
 
 ```bash
 brew tap qazaqninja/psp-wallpaper https://github.com/qazaqninja/psp-wallpaper
+brew trust qazaqninja/psp-wallpaper
 brew install psp-wallpaper
 brew services start psp-wallpaper
 ```
 
-`brew services` keeps it running and relaunches it at login.
+`brew trust` is Homebrew's confirmation step for any tap outside homebrew/core. `brew services` keeps it running and relaunches it at login.
 
 ### Direct download
 
@@ -46,6 +47,25 @@ swiftc -O main.swift -o PSPWallpaper -framework Cocoa -framework MetalKit
 ./PSPWallpaper &
 ```
 
+## Presets
+
+![The five built-in presets](docs/presets.png)
+
+*PSP Blue · Crimson · Aurora · Sunset · Monochrome*
+
+**Menu bar wave icon → Presets** — click one, the desktop changes instantly.
+
+**Presets → Save current as preset…** — name whatever you have on screen and it joins the list. Saved looks are plain JSON in `~/.config/psp-wallpaper/presets/`, so sharing one is sending a file, and installing someone else's is dropping it in that folder — no restart, the menu re-reads it every time you open it.
+
+From the shell, same thing:
+
+```bash
+psp-wallpaper --preset Aurora   # apply it
+psp-wallpaper --preset          # list every preset, built-in and yours
+```
+
+That writes `config.json`; a running wallpaper picks it up within a second. Handy in a theme-switching script.
+
 ## Use
 
 - **Menu bar wave icon → Settings…** — every knob, applied while you drag.
@@ -55,7 +75,7 @@ swiftc -O main.swift -o PSPWallpaper -framework Cocoa -framework MetalKit
 
 ## Config
 
-`~/.config/psp-wallpaper/config.json`, re-read within a second of saving, so any editor works as a live control surface. Every key is optional.
+`~/.config/psp-wallpaper/config.json`, re-read within a second of saving, so any editor works as a live control surface. Preset files use the same shape. Every key is optional.
 
 | Key | Range | What it does |
 | --- | --- | --- |
@@ -81,7 +101,7 @@ swiftc -O main.swift -o PSPWallpaper -framework Cocoa -framework MetalKit
 
 ```bash
 brew services stop psp-wallpaper && brew uninstall psp-wallpaper
-rm -rf ~/.config/psp-wallpaper
+rm -rf ~/.config/psp-wallpaper   # your presets live here, keep it if you want them
 ```
 
 MIT.

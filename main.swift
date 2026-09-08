@@ -132,6 +132,46 @@ func makeUniforms(_ c: Config) -> Uniforms {
     return u
 }
 
+// MARK: - Presets
+
+let presetsDir: String = {
+    let d = (configPath as NSString).deletingLastPathComponent + "/presets"
+    try? FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+    return d
+}()
+
+func preset(_ top: String, _ bottom: String, _ wave: String, _ crest: String,
+            _ waves: Int, _ opacity: Float, _ amp: Float,
+            _ speed: Float, _ glow: Float, _ angle: Float) -> Config {
+    Config(colorTop: top, colorBottom: bottom, waveColor: wave, crestColor: crest,
+           waveCount: waves, waveOpacity: opacity, amplitude: amp, speed: speed,
+           crestGlow: glow, gradientAngle: angle, fps: 60, renderScale: 1)
+}
+
+let builtinPresets: [(String, Config)] = [
+    ("PSP Blue",   preset("#3d4457", "#a8adde", "#8fa8cc", "#ffffff", 2, 0.35, 0.12, 0.40, 0.60, 45)),
+    ("Crimson",    preset("#5f0000", "#000000", "#000000", "#f9ffef", 3, 0.23, 0.15, 0.40, 1.24, 90)),
+    ("Aurora",     preset("#04121a", "#000000", "#001a14", "#7dffc4", 4, 0.30, 0.18, 0.35, 1.30, 90)),
+    ("Sunset",     preset("#6b1400", "#120005", "#24000e", "#ffc46b", 3, 0.28, 0.12, 0.30, 1.10, 90)),
+    ("Monochrome", preset("#101010", "#000000", "#000000", "#ffffff", 2, 0.20, 0.10, 0.25, 0.80, 90)),
+]
+
+// Read fresh every time the menu opens, so dropping a .json in the folder is enough.
+func userPresets() -> [(String, Config)] {
+    let files = (try? FileManager.default.contentsOfDirectory(atPath: presetsDir)) ?? []
+    return files.filter { $0.hasSuffix(".json") }.sorted().compactMap { f in
+        guard let d = FileManager.default.contents(atPath: presetsDir + "/" + f),
+              let c = try? JSONDecoder().decode(Config.self, from: d) else { return nil }
+        return (String(f.dropLast(5)), c)
+    }
+}
+
+func encodeConfig(_ c: Config) -> Data? {
+    let enc = JSONEncoder()
+    enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+    return try? enc.encode(c)
+}
+
 var gConfig = loadConfig() ?? Config()
 var gBase = makeUniforms(gConfig)
 let t0 = CACurrentMediaTime()
@@ -144,7 +184,25 @@ if CommandLine.arguments.contains("--selftest") {
     let c = try! JSONDecoder().decode(Config.self, from: sample)
     assert(c.fps == 24 && c.colorTop == "#112233")
     assert(MemoryLayout<Uniforms>.stride == 112) // must match MSL struct U
+    assert(builtinPresets.count >= 2)
+    let round = try! JSONDecoder().decode(Config.self, from: encodeConfig(builtinPresets[0].1)!)
+    assert(round.colorTop == builtinPresets[0].1.colorTop && round.waveCount == 2)
     print("selftest OK")
+    exit(0)
+}
+
+// `--preset <name>`: write it to config.json and exit. A running instance hot-reloads
+// within a second, so this doubles as the remote control — no IPC needed.
+if let i = CommandLine.arguments.firstIndex(of: "--preset") {
+    let all = builtinPresets + userPresets()
+    let wanted = i + 1 < CommandLine.arguments.count ? CommandLine.arguments[i + 1] : ""
+    guard let hit = all.first(where: { $0.0.caseInsensitiveCompare(wanted) == .orderedSame }),
+          let d = encodeConfig(hit.1) else {
+        print("presets: " + all.map { $0.0 }.joined(separator: ", "))
+        exit(1)
+    }
+    try? d.write(to: URL(fileURLWithPath: configPath))
+    print("applied \(hit.0)")
     exit(0)
 }
 
@@ -182,7 +240,7 @@ final class Settings: ObservableObject {
         }
     }
 
-    private func seed(from cfg: Config) {
+    func seed(from cfg: Config) {
         let u = makeUniforms(cfg)
         func c(_ v: SIMD4<Float>) -> Color {
             Color(.sRGB, red: Double(v.x), green: Double(v.y), blue: Double(v.z))
@@ -219,11 +277,8 @@ final class Settings: ObservableObject {
     }
 
     func save() {
-        let enc = JSONEncoder()
-        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        if let d = try? enc.encode(asConfig()) {
-            try? d.write(to: URL(fileURLWithPath: configPath))
-        }
+        guard let d = encodeConfig(asConfig()) else { return }
+        try? d.write(to: URL(fileURLWithPath: configPath))
     }
 }
 
@@ -295,7 +350,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var windows: [NSWindow] = []
     var views: [MTKView] = []
     var renderers: [Renderer] = []
@@ -414,6 +469,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.image = NSImage(systemSymbolName: "water.waves",
                                      accessibilityDescription: "PSP Wave")
         let menu = NSMenu()
+        let presetsItem = NSMenuItem(title: "Presets", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        sub.delegate = self          // rebuilt on every open, so saved presets show up at once
+        presetsItem.submenu = sub
+        menu.addItem(presetsItem)
         let s = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: "")
         s.target = self
         menu.addItem(s)
@@ -422,6 +482,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                      action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = menu
         statusItem = item
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        func add(_ name: String, _ cfg: Config) {
+            let it = NSMenuItem(title: name, action: #selector(applyPreset(_:)), keyEquivalent: "")
+            it.target = self
+            it.representedObject = cfg
+            menu.addItem(it)
+        }
+        builtinPresets.forEach(add)
+        let mine = userPresets()
+        if !mine.isEmpty {
+            menu.addItem(.separator())
+            mine.forEach(add)
+        }
+        menu.addItem(.separator())
+        for (title, sel) in [("Save current as preset…", #selector(savePreset)),
+                             ("Open presets folder", #selector(openPresetsFolder))] {
+            let it = NSMenuItem(title: title, action: sel, keyEquivalent: "")
+            it.target = self
+            menu.addItem(it)
+        }
+    }
+
+    @objc func applyPreset(_ sender: NSMenuItem) {
+        guard let c = sender.representedObject as? Config else { return }
+        gConfig = c
+        gBase = makeUniforms(c)
+        // seeding publishes -> Settings.apply() -> redraw + debounced write to config.json
+        Settings.shared.seed(from: c)
+        applyConfig()
+    }
+
+    @objc func savePreset() {
+        let a = NSAlert()
+        a.messageText = "Save preset"
+        a.informativeText = "Name this look. It appears under Presets straight away."
+        a.addButton(withTitle: "Save")
+        a.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.placeholderString = "My wave"
+        a.accessoryView = field
+        NSApp.activate(ignoringOtherApps: true)
+        a.window.initialFirstResponder = field
+        guard a.runModal() == .alertFirstButtonReturn else { return }
+        // slashes would silently nest directories
+        let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "/", with: "-")
+        guard !name.isEmpty, let d = encodeConfig(gConfig) else { return }
+        try? d.write(to: URL(fileURLWithPath: presetsDir + "/" + name + ".json"))
+    }
+
+    @objc func openPresetsFolder() {
+        NSWorkspace.shared.open(URL(fileURLWithPath: presetsDir))
     }
 
     @objc func openSettings() {
