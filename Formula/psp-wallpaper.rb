@@ -1,8 +1,8 @@
 class PspWallpaper < Formula
   desc "PSP-style animated wave live wallpaper for macOS, drawn on the GPU with Metal"
   homepage "https://github.com/qazaqninja/psp-wallpaper"
-  url "https://github.com/qazaqninja/psp-wallpaper/releases/download/v1.1.0/psp-wallpaper-1.1.0-arm64.tar.gz"
-  sha256 "820e0158c1106a3c741a31cfbb6368898485b0d1796ef15cae600d637d8026d8"
+  url "https://github.com/qazaqninja/psp-wallpaper/releases/download/v1.1.1/psp-wallpaper-1.1.1-arm64.tar.gz"
+  sha256 "e5ef709a8520084ddbefa3e3bb2ae1e853f20f05ef698db18536362777b764bd"
   license "MIT"
 
   depends_on :macos

@@ -199,7 +199,7 @@ if let i = CommandLine.arguments.firstIndex(of: "--preset") {
     guard let hit = all.first(where: { $0.0.caseInsensitiveCompare(wanted) == .orderedSame }),
           let d = encodeConfig(hit.1) else {
         print("presets: " + all.map { $0.0 }.joined(separator: ", "))
-        exit(1)
+        exit(wanted.isEmpty ? 0 : 1) // bare --preset is a list request, not a failure
     }
     try? d.write(to: URL(fileURLWithPath: configPath))
     print("applied \(hit.0)")
