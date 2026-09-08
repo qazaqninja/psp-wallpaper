@@ -1,0 +1,4 @@
+PSPWallpaper
+*.o
+.DS_Store
+dist/

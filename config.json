@@ -1,0 +1,14 @@
+{
+  "amplitude" : 0.15079327,
+  "colorBottom" : "#000000",
+  "colorTop" : "#5f0000",
+  "crestColor" : "#f9ffef",
+  "crestGlow" : 1.2389516,
+  "fps" : 60,
+  "gradientAngle" : 90,
+  "renderScale" : 1,
+  "speed" : 0.4,
+  "waveColor" : "#000000",
+  "waveCount" : 3,
+  "waveOpacity" : 0.22530048
+}
